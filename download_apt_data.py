@@ -4,12 +4,14 @@
 """
 import os
 import re
+import sys
 import requests
 from urllib.parse import quote
 from dotenv import load_dotenv
 import xml.etree.ElementTree as ET
 import pandas as pd
 from datetime import datetime, timedelta
+import yfinance as yf
 
 # .env 파일에서 환경변수 로드
 load_dotenv()
@@ -263,9 +265,123 @@ def save_to_xlsx(data: dict, output_file: str = None):
     return output_file
 
 
-def main():
-    """메인 함수: 각 지역별 대표 아파트들의 2006년 1월부터 2007년 12월까지 데이터 수집"""
+def download_nasdaq100_data(start_year: int, start_month: int, end_year: int, end_month: int):
+    """
+    나스닥 100 데이터를 yfinance를 통해 다운로드하여 저장
     
+    Args:
+        start_year: 시작 연도
+        start_month: 시작 월
+        end_year: 종료 연도
+        end_month: 종료 월
+    
+    Returns:
+        str: 저장된 파일 경로
+    """
+    print(f"\n{'='*60}")
+    print("나스닥 100 데이터 수집 중...")
+    print(f"{'='*60}")
+    
+    # 시작일과 종료일 설정
+    start_date = datetime(start_year, start_month, 1)
+    # 종료일은 해당 월의 마지막 날로 설정
+    if end_month == 12:
+        end_date = datetime(end_year + 1, 1, 1) - timedelta(days=1)
+    else:
+        end_date = datetime(end_year, end_month + 1, 1) - timedelta(days=1)
+    
+    print(f"기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
+    
+    try:
+        # 나스닥 100 인덱스 데이터 다운로드 (^NDX 또는 QQQ ETF 사용)
+        # QQQ는 나스닥 100을 추적하는 ETF로 더 안정적인 데이터 제공
+        ticker = "QQQ"
+        print(f"티커: {ticker} 다운로드 중...", end=" ", flush=True)
+        
+        nasdaq = yf.download(ticker, start=start_date, end=end_date + timedelta(days=1), progress=False)
+        
+        if nasdaq.empty:
+            print("[ERROR] 데이터를 가져올 수 없습니다.")
+            return None
+        
+        print(f"[OK] {len(nasdaq)}건의 데이터 수집 완료")
+        
+        # 월별 종가 데이터 추출 (각 월의 마지막 거래일 종가 사용)
+        nasdaq['Year'] = nasdaq.index.year
+        nasdaq['Month'] = nasdaq.index.month
+        
+        # 각 년월별로 마지막 거래일의 종가 선택
+        monthly_data = nasdaq.groupby(['Year', 'Month']).last().reset_index()
+        
+        # 거래년월 컬럼 추가 (YYYYMM 형식)
+        monthly_data['거래년월'] = monthly_data['Year'].astype(str) + monthly_data['Month'].astype(str).str.zfill(2)
+        
+        # 필요한 컬럼만 선택 (values를 사용하여 1차원 배열로 변환)
+        result_df = pd.DataFrame({
+            '거래년월': monthly_data['거래년월'].values,
+            '거래일자': pd.to_datetime(monthly_data['거래년월'].values, format='%Y%m', errors='coerce'),
+            '종가': monthly_data['Close'].values.flatten() if monthly_data['Close'].ndim > 1 else monthly_data['Close'].values,
+            '시가': monthly_data['Open'].values.flatten() if monthly_data['Open'].ndim > 1 else monthly_data['Open'].values,
+            '고가': monthly_data['High'].values.flatten() if monthly_data['High'].ndim > 1 else monthly_data['High'].values,
+            '저가': monthly_data['Low'].values.flatten() if monthly_data['Low'].ndim > 1 else monthly_data['Low'].values,
+            '거래량': monthly_data['Volume'].values.flatten() if monthly_data['Volume'].ndim > 1 else monthly_data['Volume'].values
+        })
+        
+        # 시작일 이후 데이터만 필터링
+        start_ym = f"{start_year:04d}{start_month:02d}"
+        result_df = result_df[result_df['거래년월'] >= start_ym]
+        
+        # 종료일 이전 데이터만 필터링
+        end_ym = f"{end_year:04d}{end_month:02d}"
+        result_df = result_df[result_df['거래년월'] <= end_ym]
+        
+        # 저장 디렉토리 생성
+        region_dir = "data/나스닥100"
+        os.makedirs(region_dir, exist_ok=True)
+        
+        # 파일 저장
+        output_file = f"{region_dir}/나스닥100_{start_year:04d}{start_month:02d}_{end_year:04d}{end_month:02d}.xlsx"
+        result_df.to_excel(output_file, index=False, engine="openpyxl")
+        
+        print(f"[OK] 나스닥 100 데이터 저장 완료: {output_file}")
+        print(f"  총 {len(result_df)}건의 데이터가 저장되었습니다.")
+        
+        return output_file
+        
+    except Exception as e:
+        print(f"[ERROR] 나스닥 100 데이터 수집 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def main():
+    """메인 함수: 각 지역별 대표 아파트들의 2006년 2월부터 2026년 1월까지 데이터 수집"""
+    
+    # 명령줄 인자 확인: --nasdaq-only 옵션이 있으면 나스닥 데이터만 수집
+    nasdaq_only = "--nasdaq-only" in sys.argv or "-n" in sys.argv
+    
+    if nasdaq_only:
+        print("=" * 60)
+        print("나스닥 100 데이터만 수집합니다.")
+        print("=" * 60)
+        
+        # 월 범위 생성 (2006-02 ~ 2026-01)
+        start_year, start_month = 2006, 2
+        end_year, end_month = 2026, 1
+        
+        # 나스닥 100 데이터 수집
+        result = download_nasdaq100_data(start_year, start_month, end_year, end_month)
+        
+        print(f"\n{'='*60}")
+        if result:
+            print("나스닥 100 데이터 수집이 완료되었습니다!")
+        else:
+            print("나스닥 100 데이터 수집 중 오류가 발생했습니다.")
+        print(f"{'='*60}")
+        return 0 if result else 1
+    
+    # 일반 모드: 부동산 데이터 + 나스닥 데이터 모두 수집
     # target_condition.txt 파싱
     print("target_condition.txt 파일을 파싱하는 중...")
     try:
@@ -275,9 +391,11 @@ def main():
         print(f"조건 파일 파싱 오류: {e}")
         return 1
     
-    # 월 범위 생성 (2006-01 ~ 2007-12)
-    months = generate_month_range(2006, 1, 2007, 12)
-    print(f"총 {len(months)}개월의 데이터를 수집합니다.")
+    # 월 범위 생성 (2006-02 ~ 2026-01)
+    start_year, start_month = 2006, 2
+    end_year, end_month = 2026, 1
+    months = generate_month_range(start_year, start_month, end_year, end_month)
+    print(f"총 {len(months)}개월의 데이터를 수집합니다. ({start_year:04d}{start_month:02d} ~ {end_year:04d}{end_month:02d})")
     
     # 각 지역별로 데이터 수집
     for condition in conditions:
@@ -328,13 +446,16 @@ def main():
         
         # 필터링된 데이터를 하나의 파일로 저장
         if all_filtered_data:
-            output_file = f"{region_dir}/{region_name}_200601_200712.xlsx"
+            output_file = f"{region_dir}/{region_name}_{start_year:04d}{start_month:02d}_{end_year:04d}{end_month:02d}.xlsx"
             result = save_to_xlsx({"items": all_filtered_data}, output_file)
             if result:
                 print(f"\n[OK] {region_name} 데이터 저장 완료: {result}")
                 print(f"  총 {len(all_filtered_data)}건의 데이터가 저장되었습니다.")
         else:
             print(f"\n[WARNING] {region_name}: 조건에 맞는 데이터가 없습니다.")
+    
+    # 나스닥 100 데이터 수집
+    download_nasdaq100_data(start_year, start_month, end_year, end_month)
     
     print(f"\n{'='*60}")
     print("모든 데이터 수집이 완료되었습니다!")

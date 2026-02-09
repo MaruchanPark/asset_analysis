@@ -20,6 +20,7 @@ PYEONG_TO_SQM = 3.3
 def load_all_data(data_dir: str = "data"):
     """
     모든 지역의 Excel 파일을 로드하여 하나의 DataFrame으로 합침
+    나스닥 100 데이터는 제외 (별도 처리)
     
     Args:
         data_dir: 데이터 디렉토리 경로
@@ -34,6 +35,10 @@ def load_all_data(data_dir: str = "data"):
         region_path = os.path.join(data_dir, region_dir)
         
         if not os.path.isdir(region_path):
+            continue
+        
+        # 나스닥 100은 별도 처리하므로 건너뜀
+        if region_dir == "나스닥100":
             continue
         
         # 각 지역 디렉토리 내의 Excel 파일 찾기
@@ -58,6 +63,73 @@ def load_all_data(data_dir: str = "data"):
     print(f"\n총 {len(combined_df)}건의 데이터를 로드했습니다.")
     
     return combined_df
+
+
+def load_nasdaq100_data(data_dir: str = "data"):
+    """
+    나스닥 100 데이터를 로드하여 수익률 계산용 DataFrame으로 변환
+    
+    Args:
+        data_dir: 데이터 디렉토리 경로
+    
+    Returns:
+        pd.DataFrame: 나스닥 100 수익률 데이터 (지역='나스닥100', 거래년월, 수익률 컬럼 포함)
+    """
+    nasdaq_dir = os.path.join(data_dir, "나스닥100")
+    
+    if not os.path.isdir(nasdaq_dir):
+        print("경고: 나스닥 100 데이터 디렉토리를 찾을 수 없습니다.")
+        return None
+    
+    # Excel 파일 찾기
+    nasdaq_files = [f for f in os.listdir(nasdaq_dir) if f.endswith('.xlsx')]
+    
+    if not nasdaq_files:
+        print("경고: 나스닥 100 데이터 파일을 찾을 수 없습니다.")
+        return None
+    
+    # 가장 최근 파일 사용 (또는 첫 번째 파일)
+    nasdaq_file = os.path.join(nasdaq_dir, nasdaq_files[0])
+    print(f"나스닥 100 데이터 로딩 중: {nasdaq_file}")
+    
+    try:
+        df = pd.read_excel(nasdaq_file)
+        
+        # 거래년월을 Period 타입으로 변환
+        df['거래년월'] = pd.to_datetime(df['거래년월'].astype(str), format='%Y%m', errors='coerce').dt.to_period('M')
+        
+        # 종가 데이터 확인
+        if '종가' not in df.columns:
+            print("경고: 나스닥 100 데이터에 '종가' 컬럼이 없습니다.")
+            return None
+        
+        # 데이터 정렬
+        df = df.sort_values('거래년월')
+        df = df.dropna(subset=['거래년월', '종가'])
+        
+        # 첫 번째 월 가격을 기준으로 누적 수익률 계산
+        if len(df) > 0 and df['종가'].iloc[0] > 0:
+            base_price = df['종가'].iloc[0]
+            df['수익률'] = ((df['종가'] - base_price) / base_price) * 100
+        else:
+            df['수익률'] = 0
+        
+        # 지역 컬럼 추가
+        df['지역'] = '나스닥100'
+        
+        # 필요한 컬럼만 선택
+        result_df = df[['지역', '거래년월', '수익률', '종가']].copy()
+        result_df.rename(columns={'종가': '평당가격'}, inplace=True)  # 일관성을 위해 컬럼명 변경
+        
+        print(f"나스닥 100 데이터 로드 완료: {len(result_df)}건")
+        
+        return result_df
+        
+    except Exception as e:
+        print(f"나스닥 100 데이터 로딩 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 
 def preprocess_data(df: pd.DataFrame):
@@ -213,12 +285,13 @@ def plot_returns_comparison(returns_df: pd.DataFrame, output_file: str = "apt_re
     plt.close()
 
 
-def plot_combined_comparison(returns_df: pd.DataFrame, output_file: str = "apt_returns_combined.png"):
+def plot_combined_comparison(returns_df: pd.DataFrame, nasdaq100_df: pd.DataFrame = None, output_file: str = "apt_returns_combined.png"):
     """
-    모든 지역의 수익률을 하나의 그래프에 비교 (4개 지역만 표시)
+    모든 지역의 수익률을 하나의 그래프에 비교 (4개 지역 + 나스닥 100)
     
     Args:
         returns_df: 수익률 데이터 DataFrame
+        nasdaq100_df: 나스닥 100 수익률 데이터 DataFrame (선택사항)
         output_file: 출력 파일명
     """
     fig, ax = plt.subplots(figsize=(16, 8))
@@ -227,12 +300,23 @@ def plot_combined_comparison(returns_df: pd.DataFrame, output_file: str = "apt_r
     target_regions = ['경기도', '대치동', '마포구', '압구정']
     region_list = [r for r in sorted(returns_df['지역'].unique()) if r in target_regions]
     
-    # 4개 색상만 사용
+    # 색상 설정 (4개 지역 + 나스닥 100)
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']  # 파란색, 주황색, 초록색, 빨간색
+    nasdaq_color = '#9467bd'  # 보라색
     
+    # 2006년 2월부터 데이터만 사용하기 위해 필터링
+    start_period = pd.Period('2006-02', freq='M')
+    
+    # 지역별 데이터 플롯
     for idx, region in enumerate(region_list):
         region_data = returns_df[returns_df['지역'] == region].copy()
         region_data = region_data.sort_values('거래년월')
+        
+        # 2006년 2월 이후 데이터만 필터링
+        region_data = region_data[region_data['거래년월'] >= start_period]
+        
+        if len(region_data) == 0:
+            continue
         
         # 거래년월을 문자열로 변환
         x_labels = [str(ym) for ym in region_data['거래년월']]
@@ -241,14 +325,45 @@ def plot_combined_comparison(returns_df: pd.DataFrame, output_file: str = "apt_r
         ax.plot(x_positions, region_data['수익률'], marker='o', linewidth=2.5, 
                markersize=6, label=region, color=colors[idx % len(colors)], alpha=0.8)
     
+    # 나스닥 100 데이터 플롯
+    if nasdaq100_df is not None and len(nasdaq100_df) > 0:
+        nasdaq_data = nasdaq100_df.copy()
+        nasdaq_data = nasdaq_data.sort_values('거래년월')
+        
+        # 2006년 2월 이후 데이터만 필터링
+        nasdaq_data = nasdaq_data[nasdaq_data['거래년월'] >= start_period]
+        
+        if len(nasdaq_data) > 0:
+            # x축을 맞추기 위해 첫 번째 지역의 날짜 기준으로 매핑
+            if len(region_list) > 0:
+                first_region = returns_df[returns_df['지역'] == region_list[0]].sort_values('거래년월')
+                first_region = first_region[first_region['거래년월'] >= start_period]
+                first_region_labels = [str(ym) for ym in first_region['거래년월']]
+                
+                # 나스닥 100의 각 월을 첫 번째 지역의 인덱스에 매핑
+                nasdaq_x_positions = []
+                nasdaq_returns = []
+                
+                for _, row in nasdaq_data.iterrows():
+                    nasdaq_period = str(row['거래년월'])
+                    if nasdaq_period in first_region_labels:
+                        idx = first_region_labels.index(nasdaq_period)
+                        nasdaq_x_positions.append(idx)
+                        nasdaq_returns.append(row['수익률'])
+                
+                if len(nasdaq_x_positions) > 0:
+                    ax.plot(nasdaq_x_positions, nasdaq_returns, marker='s', linewidth=2.5, 
+                           markersize=6, label='나스닥100', color=nasdaq_color, alpha=0.8, linestyle='--')
+    
     ax.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
-    ax.set_title('지역별 월별 수익률 비교 (1평당 기준)', fontsize=16, fontweight='bold')
+    ax.set_title('지역별 월별 수익률 비교 (1평당 기준) + 나스닥 100', fontsize=16, fontweight='bold')
     ax.set_xlabel('거래년월', fontsize=12)
     ax.set_ylabel('수익률 (%)', fontsize=12)
     
     # x축 레이블 설정 (첫 번째 지역의 날짜 사용)
     if len(region_list) > 0:
         first_region = returns_df[returns_df['지역'] == region_list[0]].sort_values('거래년월')
+        first_region = first_region[first_region['거래년월'] >= start_period]
         x_labels = [str(ym) for ym in first_region['거래년월']]
         x_positions = range(len(x_labels))
         step = max(1, len(x_positions)//15)
@@ -340,6 +455,10 @@ def main():
         returns_df = calculate_monthly_returns(df_processed)
         print(f"수익률 계산 완료: {len(returns_df)}건")
         
+        # 나스닥 100 데이터 로드
+        print("\n[3-1단계] 나스닥 100 데이터 로드 중...")
+        nasdaq100_df = load_nasdaq100_data("data")
+        
         # 지역별 통계 출력
         print("\n지역별 수익률 통계:")
         print("-" * 60)
@@ -354,10 +473,20 @@ def main():
                 print(f"  표준편차: {region_returns.std():.2f}%")
                 print()
         
+        # 나스닥 100 통계 출력
+        if nasdaq100_df is not None and len(nasdaq100_df) > 0:
+            nasdaq_returns = nasdaq100_df['수익률']
+            print("나스닥 100:")
+            print(f"  평균 수익률: {nasdaq_returns.mean():.2f}%")
+            print(f"  최대 수익률: {nasdaq_returns.max():.2f}%")
+            print(f"  최소 수익률: {nasdaq_returns.min():.2f}%")
+            print(f"  표준편차: {nasdaq_returns.std():.2f}%")
+            print()
+        
         # 4. 그래프 생성
         print("\n[4단계] 그래프 생성 중...")
         plot_returns_comparison(returns_df, "apt_returns_comparison.png")
-        plot_combined_comparison(returns_df, "apt_returns_combined.png")
+        plot_combined_comparison(returns_df, nasdaq100_df, "apt_returns_combined.png")
         plot_absolute_price_comparison(returns_df, "apt_absolute_price.png")
         
         # 5. 결과를 Excel로 저장
