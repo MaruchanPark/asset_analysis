@@ -262,10 +262,10 @@ def plot_combined_comparison(returns_df: pd.DataFrame, output_file: str = "apt_r
     plt.close()
 
 
-def plot_price_comparison(returns_df: pd.DataFrame, output_file: str = "apt_price_comparison.png"):
+def plot_absolute_price_comparison(returns_df: pd.DataFrame, output_file: str = "apt_absolute_price.png"):
     """
-    지역별 1평당 가격 추이 비교 그래프 (4개 지역만 표시)
-    첫 번째 월 값을 기준으로 정규화하여 모든 지역이 같은 시작점에서 시작
+    지역별 월별 절대 가격 비교 그래프 (4개 지역만 표시)
+    검증을 위해 실제 1평당 가격을 표시
     
     Args:
         returns_df: 수익률 데이터 DataFrame (평당가격 정보 포함)
@@ -284,24 +284,21 @@ def plot_price_comparison(returns_df: pd.DataFrame, output_file: str = "apt_pric
         region_data = returns_df[returns_df['지역'] == region].copy()
         region_data = region_data.sort_values('거래년월')
         
-        # 첫 번째 월 값을 기준으로 정규화 (첫 번째 월 = 100%)
-        if len(region_data) > 0 and region_data['평당가격'].iloc[0] > 0:
-            base_price = region_data['평당가격'].iloc[0]
-            region_data['정규화가격'] = (region_data['평당가격'] / base_price - 1) * 100  # 첫 월 대비 변화율 (%)
-        else:
-            region_data['정규화가격'] = 0
-        
+        # 절대 가격 사용 (단위: 만원/평)
         x_labels = [str(ym) for ym in region_data['거래년월']]
         x_positions = range(len(x_labels))
         
-        ax.plot(x_positions, region_data['정규화가격'], marker='o', linewidth=2.5, 
+        # 평당가격을 만원 단위로 변환
+        price_in_manwon = region_data['평당가격'] / 10000
+        
+        ax.plot(x_positions, price_in_manwon, marker='o', linewidth=2.5, 
                markersize=6, label=region, color=colors[idx % len(colors)], alpha=0.8)
     
-    ax.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
-    ax.set_title('지역별 1평당 가격 추이 비교 (첫 월 기준 정규화)', fontsize=16, fontweight='bold')
+    ax.set_title('지역별 월별 절대 가격 비교 (1평당 기준)', fontsize=16, fontweight='bold')
     ax.set_xlabel('거래년월', fontsize=12)
-    ax.set_ylabel('가격 변화율 (%)', fontsize=12)
+    ax.set_ylabel('1평당 가격 (만원)', fontsize=12)
     
+    # x축 레이블 설정 (첫 번째 지역의 날짜 사용)
     if len(region_list) > 0:
         first_region = returns_df[returns_df['지역'] == region_list[0]].sort_values('거래년월')
         x_labels = [str(ym) for ym in first_region['거래년월']]
@@ -315,7 +312,7 @@ def plot_price_comparison(returns_df: pd.DataFrame, output_file: str = "apt_pric
     
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches='tight')
-    print(f"가격 추이 비교 그래프 저장 완료: {output_file}")
+    print(f"절대 가격 비교 그래프 저장 완료: {output_file}")
     plt.close()
 
 
@@ -358,7 +355,7 @@ def main():
         print("\n[4단계] 그래프 생성 중...")
         plot_returns_comparison(returns_df, "apt_returns_comparison.png")
         plot_combined_comparison(returns_df, "apt_returns_combined.png")
-        plot_price_comparison(returns_df, "apt_price_comparison.png")
+        plot_absolute_price_comparison(returns_df, "apt_absolute_price.png")
         
         # 5. 결과를 Excel로 저장
         print("\n[5단계] 결과 저장 중...")
