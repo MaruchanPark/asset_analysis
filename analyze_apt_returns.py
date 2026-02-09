@@ -290,7 +290,7 @@ def plot_returns_comparison(returns_df: pd.DataFrame, output_file: str = "apt_re
         
         # 수익률 그래프
         ax = axes[idx]
-        ax.plot(x_positions, region_data['수익률'], marker='o', linewidth=2, markersize=6, label='월별 수익률 (%)')
+        ax.plot(x_positions, region_data['수익률'], marker='o', linewidth=1.5, markersize=3, label='월별 수익률 (%)', alpha=0.7)
         ax.axhline(y=0, color='gray', linestyle='--', linewidth=1, alpha=0.5)
         ax.set_title(f'{region} - 월별 수익률 (1평당 기준)', fontsize=14, fontweight='bold')
         ax.set_xlabel('거래년월', fontsize=12)
@@ -361,8 +361,8 @@ def plot_combined_comparison(returns_df: pd.DataFrame, financial_data_dict: dict
         x_labels = [str(ym) for ym in region_data['거래년월']]
         x_positions = range(len(x_labels))
         
-        ax.plot(x_positions, region_data['수익률'], marker='o', linewidth=2.5, 
-               markersize=6, label=region, color=region_colors[idx % len(region_colors)], alpha=0.8)
+        ax.plot(x_positions, region_data['수익률'], marker='o', linewidth=2, 
+               markersize=3, label=region, color=region_colors[idx % len(region_colors)], alpha=0.8)
     
     # 금융 자산 데이터 플롯
     if financial_data_dict:
@@ -403,8 +403,8 @@ def plot_combined_comparison(returns_df: pd.DataFrame, financial_data_dict: dict
                 if len(asset_x_positions) > 0:
                     color = financial_colors.get(asset_name, '#808080')
                     marker, linestyle = financial_styles.get(asset_name, ('o', '-'))
-                    ax.plot(asset_x_positions, asset_returns, marker=marker, linewidth=2.5, 
-                           markersize=6, label=asset_name, color=color, alpha=0.8, linestyle=linestyle)
+                    ax.plot(asset_x_positions, asset_returns, marker=marker, linewidth=2, 
+                           markersize=3, label=asset_name, color=color, alpha=0.8, linestyle=linestyle)
     
     ax.axhline(y=0, color='black', linestyle='--', linewidth=1, alpha=0.5)
     
@@ -472,8 +472,8 @@ def plot_absolute_price_comparison(returns_df: pd.DataFrame, output_file: str = 
         # 평당가격은 이미 만원/평 단위이므로 그대로 사용
         price_in_manwon = region_data['평당가격']
         
-        ax.plot(x_positions, price_in_manwon, marker='o', linewidth=2.5, 
-               markersize=6, label=region, color=colors[idx % len(colors)], alpha=0.8)
+        ax.plot(x_positions, price_in_manwon, marker='o', linewidth=2, 
+               markersize=3, label=region, color=colors[idx % len(colors)], alpha=0.8)
     
     ax.set_title('지역별 월별 절대 가격 비교 (1평당 기준)', fontsize=16, fontweight='bold')
     ax.set_xlabel('거래년월', fontsize=12)
