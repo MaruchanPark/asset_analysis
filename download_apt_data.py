@@ -265,11 +265,13 @@ def save_to_xlsx(data: dict, output_file: str = None):
     return output_file
 
 
-def download_nasdaq100_data(start_year: int, start_month: int, end_year: int, end_month: int):
+def download_financial_data(ticker: str, asset_name: str, start_year: int, start_month: int, end_year: int, end_month: int):
     """
-    나스닥 100 데이터를 yfinance를 통해 다운로드하여 저장
+    금융 자산 데이터를 yfinance를 통해 다운로드하여 저장 (범용 함수)
     
     Args:
+        ticker: yfinance 티커 심볼 (예: "QQQ", "BTC-USD", "IAU")
+        asset_name: 자산 이름 (디렉토리명 및 파일명에 사용)
         start_year: 시작 연도
         start_month: 시작 월
         end_year: 종료 연도
@@ -279,7 +281,7 @@ def download_nasdaq100_data(start_year: int, start_month: int, end_year: int, en
         str: 저장된 파일 경로
     """
     print(f"\n{'='*60}")
-    print("나스닥 100 데이터 수집 중...")
+    print(f"{asset_name} 데이터 수집 중...")
     print(f"{'='*60}")
     
     # 시작일과 종료일 설정
@@ -293,25 +295,22 @@ def download_nasdaq100_data(start_year: int, start_month: int, end_year: int, en
     print(f"기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')}")
     
     try:
-        # 나스닥 100 인덱스 데이터 다운로드 (^NDX 또는 QQQ ETF 사용)
-        # QQQ는 나스닥 100을 추적하는 ETF로 더 안정적인 데이터 제공
-        ticker = "QQQ"
         print(f"티커: {ticker} 다운로드 중...", end=" ", flush=True)
         
-        nasdaq = yf.download(ticker, start=start_date, end=end_date + timedelta(days=1), progress=False)
+        data = yf.download(ticker, start=start_date, end=end_date + timedelta(days=1), progress=False)
         
-        if nasdaq.empty:
+        if data.empty:
             print("[ERROR] 데이터를 가져올 수 없습니다.")
             return None
         
-        print(f"[OK] {len(nasdaq)}건의 데이터 수집 완료")
+        print(f"[OK] {len(data)}건의 데이터 수집 완료")
         
         # 월별 종가 데이터 추출 (각 월의 마지막 거래일 종가 사용)
-        nasdaq['Year'] = nasdaq.index.year
-        nasdaq['Month'] = nasdaq.index.month
+        data['Year'] = data.index.year
+        data['Month'] = data.index.month
         
         # 각 년월별로 마지막 거래일의 종가 선택
-        monthly_data = nasdaq.groupby(['Year', 'Month']).last().reset_index()
+        monthly_data = data.groupby(['Year', 'Month']).last().reset_index()
         
         # 거래년월 컬럼 추가 (YYYYMM 형식)
         monthly_data['거래년월'] = monthly_data['Year'].astype(str) + monthly_data['Month'].astype(str).str.zfill(2)
@@ -336,39 +335,152 @@ def download_nasdaq100_data(start_year: int, start_month: int, end_year: int, en
         result_df = result_df[result_df['거래년월'] <= end_ym]
         
         # 저장 디렉토리 생성
-        region_dir = "data/나스닥100"
+        region_dir = f"data/{asset_name}"
         os.makedirs(region_dir, exist_ok=True)
         
         # 파일 저장
-        output_file = f"{region_dir}/나스닥100_{start_year:04d}{start_month:02d}_{end_year:04d}{end_month:02d}.xlsx"
+        output_file = f"{region_dir}/{asset_name}_{start_year:04d}{start_month:02d}_{end_year:04d}{end_month:02d}.xlsx"
         result_df.to_excel(output_file, index=False, engine="openpyxl")
         
-        print(f"[OK] 나스닥 100 데이터 저장 완료: {output_file}")
+        print(f"[OK] {asset_name} 데이터 저장 완료: {output_file}")
         print(f"  총 {len(result_df)}건의 데이터가 저장되었습니다.")
         
         return output_file
         
     except Exception as e:
-        print(f"[ERROR] 나스닥 100 데이터 수집 오류: {e}")
+        print(f"[ERROR] {asset_name} 데이터 수집 오류: {e}")
         import traceback
         traceback.print_exc()
         return None
 
 
+def download_nasdaq100_data(start_year: int, start_month: int, end_year: int, end_month: int):
+    """
+    나스닥 100 데이터를 yfinance를 통해 다운로드하여 저장
+    
+    Args:
+        start_year: 시작 연도
+        start_month: 시작 월
+        end_year: 종료 연도
+        end_month: 종료 월
+    
+    Returns:
+        str: 저장된 파일 경로
+    """
+    # QQQ는 나스닥 100을 추적하는 ETF로 더 안정적인 데이터 제공
+    return download_financial_data("QQQ", "나스닥100", start_year, start_month, end_year, end_month)
+
+
+def download_bitcoin_data(start_year: int, start_month: int, end_year: int, end_month: int):
+    """
+    비트코인 데이터를 yfinance를 통해 다운로드하여 저장
+    
+    Args:
+        start_year: 시작 연도
+        start_month: 시작 월
+        end_year: 종료 연도
+        end_month: 종료 월
+    
+    Returns:
+        str: 저장된 파일 경로
+    """
+    return download_financial_data("BTC-USD", "비트코인", start_year, start_month, end_year, end_month)
+
+
+def download_iau_data(start_year: int, start_month: int, end_year: int, end_month: int):
+    """
+    IAU (금 ETF) 데이터를 yfinance를 통해 다운로드하여 저장
+    
+    Args:
+        start_year: 시작 연도
+        start_month: 시작 월
+        end_year: 종료 연도
+        end_month: 종료 월
+    
+    Returns:
+        str: 저장된 파일 경로
+    """
+    return download_financial_data("IAU", "IAU", start_year, start_month, end_year, end_month)
+
+
+def download_kospi100_data(start_year: int, start_month: int, end_year: int, end_month: int):
+    """
+    코스피100 데이터를 yfinance를 통해 다운로드하여 저장
+    
+    Args:
+        start_year: 시작 연도
+        start_month: 시작 월
+        end_year: 종료 연도
+        end_month: 종료 월
+    
+    Returns:
+        str: 저장된 파일 경로
+    """
+    # 코스피100은 ^KS100 또는 다른 티커 사용 가능
+    # yfinance에서는 ^KS100이 작동하지 않을 수 있으므로 KODEX KOSPI100 ETF (069500.KS) 사용
+    return download_financial_data("069500.KS", "코스피100", start_year, start_month, end_year, end_month)
+
+
+def download_cqqq_data(start_year: int, start_month: int, end_year: int, end_month: int):
+    """
+    CQQQ (중국 기술주 ETF) 데이터를 yfinance를 통해 다운로드하여 저장
+    
+    Args:
+        start_year: 시작 연도
+        start_month: 시작 월
+        end_year: 종료 연도
+        end_month: 종료 월
+    
+    Returns:
+        str: 저장된 파일 경로
+    """
+    return download_financial_data("CQQQ", "CQQQ", start_year, start_month, end_year, end_month)
+
+
 def main():
     """메인 함수: 각 지역별 대표 아파트들의 2006년 2월부터 2026년 1월까지 데이터 수집"""
     
-    # 명령줄 인자 확인: --nasdaq-only 옵션이 있으면 나스닥 데이터만 수집
+    # 명령줄 인자 확인
+    financial_only = "--financial-only" in sys.argv or "-f" in sys.argv
     nasdaq_only = "--nasdaq-only" in sys.argv or "-n" in sys.argv
     
+    # 월 범위 생성 (2006-02 ~ 2026-01)
+    start_year, start_month = 2006, 2
+    end_year, end_month = 2026, 1
+    
+    # 금융 자산만 수집하는 경우
+    if financial_only:
+        print("=" * 60)
+        print("금융 자산 데이터만 수집합니다.")
+        print("=" * 60)
+        
+        results = []
+        
+        # 모든 금융 자산 데이터 수집
+        results.append(("나스닥100", download_nasdaq100_data(start_year, start_month, end_year, end_month)))
+        results.append(("비트코인", download_bitcoin_data(start_year, start_month, end_year, end_month)))
+        results.append(("IAU", download_iau_data(start_year, start_month, end_year, end_month)))
+        results.append(("코스피100", download_kospi100_data(start_year, start_month, end_year, end_month)))
+        results.append(("CQQQ", download_cqqq_data(start_year, start_month, end_year, end_month)))
+        
+        print(f"\n{'='*60}")
+        print("금융 자산 데이터 수집 결과:")
+        print("-" * 60)
+        success_count = 0
+        for name, result in results:
+            status = "성공" if result else "실패"
+            print(f"  {name}: {status}")
+            if result:
+                success_count += 1
+        print(f"\n총 {success_count}/{len(results)}개 자산 수집 완료")
+        print(f"{'='*60}")
+        return 0 if success_count > 0 else 1
+    
+    # 나스닥만 수집하는 경우 (하위 호환성)
     if nasdaq_only:
         print("=" * 60)
         print("나스닥 100 데이터만 수집합니다.")
         print("=" * 60)
-        
-        # 월 범위 생성 (2006-02 ~ 2026-01)
-        start_year, start_month = 2006, 2
-        end_year, end_month = 2026, 1
         
         # 나스닥 100 데이터 수집
         result = download_nasdaq100_data(start_year, start_month, end_year, end_month)
@@ -454,8 +566,16 @@ def main():
         else:
             print(f"\n[WARNING] {region_name}: 조건에 맞는 데이터가 없습니다.")
     
-    # 나스닥 100 데이터 수집
+    # 모든 금융 자산 데이터 수집
+    print(f"\n{'='*60}")
+    print("금융 자산 데이터 수집 중...")
+    print(f"{'='*60}")
+    
     download_nasdaq100_data(start_year, start_month, end_year, end_month)
+    download_bitcoin_data(start_year, start_month, end_year, end_month)
+    download_iau_data(start_year, start_month, end_year, end_month)
+    download_kospi100_data(start_year, start_month, end_year, end_month)
+    download_cqqq_data(start_year, start_month, end_year, end_month)
     
     print(f"\n{'='*60}")
     print("모든 데이터 수집이 완료되었습니다!")
