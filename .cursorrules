@@ -1,0 +1,29 @@
+# 프로젝트: 부동산 자산 분석 (Asset Analysis)
+
+## 프로젝트 설정
+- 이 프로젝트는 **uv**를 사용하는 Python 프로젝트입니다
+- Python 스크립트 실행 시 `uv run python` 명령어를 사용합니다
+- **중요**: Windows PowerShell에서 Python 스크립트 실행 시 한글 출력을 위해 반드시 인코딩 설정을 포함해야 합니다:
+  ```powershell
+  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8; $OutputEncoding = [System.Text.Encoding]::UTF8; $env:PYTHONIOENCODING='utf-8'; uv run python [스크립트명]
+  ```
+
+## 데이터 개요
+이 프로젝트는 한국 부동산 공공데이터포털의 아파트 매매 실거래가 데이터를 수집하고 분석합니다.
+
+### 데이터 소스
+- API: 한국부동산원 아파트 매매 실거래가 API (RTMSDataSvcAptTrade)
+
+### 주요 데이터 필드
+- **아파트 정보**: aptNm (아파트명), aptDong (동), buildYear (건축년도)
+- **거래 정보**: dealAmount (거래금액), dealYear/Month/Day (거래일자), cdealType (계약유형)
+- **위치 정보**: umdNm (법정동), sggCd (시군구코드), jibun (지번)
+- **건물 정보**: floor (층), excluUseAr (전용면적)
+- **기타**: buyerGbn (매수자구분), slerGbn (매도자구분), dealingGbn (거래구분)
+
+### 데이터 저장 형식
+- Excel 파일 (.xlsx)로 저장
+- 지역별 디렉토리 구조: `data/{지역명}/{지역명}_YYYYMM_YYYYMM.xlsx`
+
+### 필터링 조건
+- 조건은 `target_condition.txt` 파일에서 관리
