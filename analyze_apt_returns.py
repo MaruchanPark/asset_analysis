@@ -94,7 +94,8 @@ def preprocess_data(df: pd.DataFrame):
     df = df[available_cols].copy()
     
     # 데이터 타입 변환
-    # dealAmount: 문자열에서 숫자로 변환 (예: "100,000" -> 100000)
+    # dealAmount: 문자열에서 숫자로 변환 (예: "28,000" -> 28000)
+    # 주의: dealAmount는 만원 단위로 저장되어 있음
     if 'dealAmount' in df.columns:
         df['dealAmount'] = df['dealAmount'].astype(str).str.replace(',', '').astype(float)
     
@@ -122,8 +123,9 @@ def preprocess_data(df: pd.DataFrame):
     df = df[df['excluUseAr'] > 0]
     
     # 1평당 가격 계산 (1평 = 3.3㎡)
+    # dealAmount는 만원 단위이므로 평당가격도 만원/평 단위로 계산됨
     df['평수'] = df['excluUseAr'] / PYEONG_TO_SQM
-    df['평당가격'] = df['dealAmount'] / df['평수']
+    df['평당가격'] = df['dealAmount'] / df['평수']  # 단위: 만원/평
     
     return df
 
@@ -285,11 +287,12 @@ def plot_absolute_price_comparison(returns_df: pd.DataFrame, output_file: str = 
         region_data = region_data.sort_values('거래년월')
         
         # 절대 가격 사용 (단위: 만원/평)
+        # dealAmount가 이미 만원 단위이므로 평당가격도 만원/평 단위임
         x_labels = [str(ym) for ym in region_data['거래년월']]
         x_positions = range(len(x_labels))
         
-        # 평당가격을 만원 단위로 변환
-        price_in_manwon = region_data['평당가격'] / 10000
+        # 평당가격은 이미 만원/평 단위이므로 그대로 사용
+        price_in_manwon = region_data['평당가격']
         
         ax.plot(x_positions, price_in_manwon, marker='o', linewidth=2.5, 
                markersize=6, label=region, color=colors[idx % len(colors)], alpha=0.8)
